@@ -26,7 +26,7 @@ class FastPact {
         if (this.delegate != null) {
             return
         }
-        if (this.delegate == this) {
+        if (delegate == this.deep()) {
             return this.setPromise(new Failure(new TypeError()))
         }
         this.delegate = delegate
@@ -205,7 +205,7 @@ function to_promise(arg) {
         try {
             targetThen.call(target, onResolve, onReject)
         } catch(e) {
-            pact.setErr(e)
+            ff.onReject(e)
         }
     }
     

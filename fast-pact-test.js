@@ -19,51 +19,112 @@ var rejected = adapter.rejected;
 
 var dummy = { dummy: "dummy" }; // we fulfill or reject with this when we don't intend to test against it
 var sentinel = { sentinel: "sentinel" }; // a sentinel fulfillment value to test for with strict equality
+var other = { other: "other" }; // a value we don't want to be strict equal to
 
-// const p = deferred()
-// p.promise.then((result) => {
-//     console.log(result)
-// }, (err) => {
-//     console.log(err)
-// })
-// p.resolve(5)
+function specify(msg, run_test) {
+    run_test(() => {})
+}
 
-// var d = null;
+function describe(msg, cb) {
+    console.log(msg)
+    cb()
+}
 
-// function xFactory() {
-//     d = deferred();
-//     setTimeout(function () {
-//         d.resolve(sentinel);
-//     }, 50);
-//     return d.promise;
-// }
 
-// function specify(msg, run_test) {
-//     run_test(() => {})
-// }
+function testPromiseResolution(xFactory, test) {
+    specify("via return from a fulfilled promise", function (done) {
+        var promise = resolved(dummy).then(function onBasePromiseFulfilled() {
+            return xFactory();
+        });
 
-// function xFactory() {
-//     return Object.create(null, {
-//         then: {
-//             get: function () {
-//                 console.log("Then get")
-//                 return function thenMethodForX(onFulfilled) {
-//                     onFulfilled();
-//                 };
-//             }
-//         }
+        test(promise, done);
+    });
+
+    specify("via return from a rejected promise", function (done) {
+        var promise = rejected(dummy).then(null, function onBasePromiseRejected() {
+            return xFactory();
+        });
+
+        test(promise, done);
+    });
+}
+
+function testCallingResolvePromise(yFactory, stringRepresentation, test) {
+    describe("`y` is " + stringRepresentation, function () {
+        describe("`then` calls `resolvePromise` synchronously", function () {
+            function xFactory() {
+                return {
+                    then: function (resolvePromise) {
+                        resolvePromise(yFactory());
+                    }
+                };
+            }
+
+            testPromiseResolution(xFactory, test);
+        });
+
+        describe("`then` calls `resolvePromise` asynchronously", function () {
+            function xFactory() {
+                return {
+                    then: function (resolvePromise) {
+                        setTimeout(function () {
+                            resolvePromise(yFactory());
+                        }, 0);
+                    }
+                };
+            }
+
+            testPromiseResolution(xFactory, test);
+        });
+    });
+}
+
+function testCallingResolvePromiseFulfillsWith(yFactory, stringRepresentation, fulfillmentValue) {
+    testCallingResolvePromise(yFactory, stringRepresentation, function (promise, done) {
+        promise.then(function onPromiseFulfilled(value) {
+            console.log(vale, fulfillmentValue)
+            console.log("Done")
+        });
+    });
+}
+
+function testCallingResolvePromiseRejectsWith(yFactory, stringRepresentation, rejectionReason) {
+    testCallingResolvePromise(yFactory, stringRepresentation, function (promise, done) {
+        promise.then(null, function onPromiseRejected(reason) {
+            console.log(reason, rejectionReason)
+            console.log("Done")
+        });
+    });
+}
+
+// describe("2.3.1: If `promise` and `x` refer to the same object, reject `promise` with a `TypeError' as the reason.",
+//          function () {
+//     specify("via return from a fulfilled promise", function (done) {
+//         var promise = resolved(dummy).then(function () {
+//             return promise;
+//         });
+
+//         promise.then((result) => {
+//             console.log(result)
+//         }, function (reason) {
+//             console.log(reason)
+//             console.log("Done")
+//         });
 //     });
-// }
 
+//     specify("via return from a rejected promise", function (done) {
+//         var promise = rejected(dummy).then(null, function () {
+//             return promise;
+//         });
 
-// var promise = resolved(dummy).then(function onBasePromiseFulfilled() {
-//     return xFactory();
+//         promise.then((result) => {
+//             console.log(result)
+//         }, function (reason) {
+//             console.log(reason)
+//             console.log("Done")
+//         });
+//     });
 // });
-
-// promise.then(function () {
-//     console.log("CB called")
-// });
-
 
 
 const promisesAplusTests = require("promises-aplus-tests");
