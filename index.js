@@ -20,8 +20,6 @@ const RESULT_SET = 1
 const ERR_SET = 2
 const FORWARD_SET = 3
 
-
-
 class Pact {
 
     static resolve(result) {
@@ -45,7 +43,7 @@ class Pact {
         let pending = 1
         const resultArr = []
 
-        for (p in pacts) {
+        for (const p of pacts) {
             ++pending
 
             p.then((result) => {
@@ -68,7 +66,7 @@ class Pact {
 
     static race(pacts) {
         const pact = new Pact()
-        for (p in pacts) {
+        for (const p of pacts) {
             p.then((result) => {
                 pact.setResult(result)
             }, (err) => {
@@ -81,10 +79,9 @@ class Pact {
     static any(pacts) {
         const pact = new Pact()
         let pending = 1
-        const resultArr = []
         let last_err = new Error("No promises")
 
-        for (p in pacts) {
+        for (const p of pacts) {
             ++pending
 
             p.then((result) => {

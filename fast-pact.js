@@ -1,6 +1,6 @@
-function isFunc(fn) {
-    return typeof fn === 'function'
-}
+function isFunc(obj) {
+    return !!(obj && obj.constructor && obj.call && obj.apply);
+};
 
 // TODO(anitvasu): This is non-standard :(
 function runImmediate(fn) {
@@ -9,8 +9,95 @@ function runImmediate(fn) {
 
 class FastPact {
 
-    static resolve(result) {
-        return to_promise(result)
+    static all(pacts) {
+        return new FastPact((resolve, reject) => {
+            let pending = 1
+            const resultArr = []
+    
+            for (const p of pacts) {
+                ++pending
+    
+                p.then((result) => {
+                    resultArr.push(result)
+                    pending--
+                    if (pending == 0) {
+                        resolve(resultArr)
+                    }
+                }, (err) => {
+                    reject(err)
+                })
+            }
+            pending--
+            if (pending == 0) {
+                resolve(resultArr)
+            }
+        });
+    }
+
+    static race(pacts) {
+        return new FastPact((resolve, reject) => {
+            for (const p of pacts) {
+                p.then((result) => {
+                    resolve(result)
+                }, (err) => {
+                    reject(err)
+                })
+            }
+        })
+    }
+
+    static any(pacts) {
+        return new FastPact((resolve, reject) => {
+            let pending = 1
+            let last_err = new Error("No promises")
+    
+            for (const p of pacts) {
+                ++pending
+    
+                p.then((result) => {
+                    resolve(result)
+                }, (err) => {
+                    last_err = err
+                    pending--
+                    if (pending == 0) {
+                        reject(last_err)
+                    }
+                })
+            }
+            pending--
+            if (pending == 0) {
+                reject(last_err)
+            }
+        });
+    }
+
+    static resolve(arg) {
+        if (arg instanceof FastPact) {
+            return arg.deep()
+        }
+    
+        if (arg instanceof Immediate || arg instanceof Failure) {
+            return arg
+        }
+    
+        const argType = typeof arg
+        if (arg == null || (argType != 'function' && argType != 'object')) {
+            return new Immediate(arg)
+        }
+    
+        let argThen
+        try {
+            argThen = arg.then
+        } catch(e) {
+            return new Failure(e)
+        }
+        if (!isFunc(argThen)) {
+            return new Immediate(arg)
+        }
+    
+        return new FastPact((onResolve, onReject) => {
+            argThen.call(arg, onResolve, onReject);
+        });
     }
 
     static reject(err) {
@@ -23,11 +110,14 @@ class FastPact {
         if (executor != null) {
             try {
                 executor(
-                    (result) => this.setPromise(to_promise(result)), 
+                    (result) => this.setPromise(FastPact.resolve(result)), 
                     (err) => this.setPromise(new Failure(err)));
             } catch(e) {
                 this.setPromise(new Failure(e));
             }
+        }
+        if (this.delegate != null) {
+            return this.delegate;
         }
     }
 
@@ -35,7 +125,7 @@ class FastPact {
         if (this.delegate != null) {
             return
         }
-        if (delegate == this.deep()) {
+        if (delegate == this) {
             return this.setPromise(new Failure(new TypeError()))
         }
         this.delegate = delegate
@@ -58,10 +148,7 @@ class FastPact {
     
     deep() {
         if (this.delegate != null) {
-            if (this.delegate instanceof FastPact) {
-                this.delegate = this.delegate.deep()
-            }
-            return this.delegate
+            return this.delegate.deep()
         } else {
             return this
         }
@@ -90,6 +177,9 @@ class Immediate {
         }
         return next(() => onResolve(this.value));
     }
+    deep() {
+        return this;
+    }
 }
 
 class Failure {
@@ -100,44 +190,11 @@ class Failure {
         if (!isFunc(onReject)) {
             return this
         }
-
         return next(() => onReject(this.err));
     }
-}
-
-function to_promise(arg) {
-
-    if (arg instanceof FastPact) {
-        return arg.deep()
+    deep() {
+        return this;
     }
-
-    if (arg instanceof Immediate || arg instanceof Failure) {
-        return arg
-    }
-
-    const argType = typeof arg
-    if (argType != 'function' && argType != 'object') {
-        return new Immediate(arg)
-    }
-
-    if (!arg) {
-        return new Immediate(arg)
-    }
-
-    let argThen
-    try {
-        argThen = arg.then
-    } catch(e) {
-        return new Failure(e)
-    }
-    const argThenType = typeof argThen
-    if (argThenType != 'function') {
-        return new Immediate(arg)
-    }
-
-    return new FastPact((onResolve, onReject) => {
-        argThen.call(arg, onResolve, onReject);
-    });
 }
 
 
