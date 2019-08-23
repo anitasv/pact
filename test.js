@@ -1,4 +1,4 @@
-const Pact = require("./fast-pact.js")
+const Pact = require("./index.js")
 
 const adapter = {
     resolved: (value) => Pact.resolve(value),

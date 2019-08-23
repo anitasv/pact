@@ -2,11 +2,11 @@
   "name": "fast-pact",
   "version": "1.0.0",
   "description": "",
-  "main": "fast-pact.js",
+  "main": "index.js",
   "scripts": {
-    "test": "node fast-pact-test.js"
+    "test": "node test.js"
   },
-  "author": "",
+  "author": "Anita S V (anitasvasu@gmail.com)",
   "license": "ISC",
   "dependencies": {
     "promises-aplus-tests": "^2.1.2"
