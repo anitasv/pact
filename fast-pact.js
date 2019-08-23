@@ -17,9 +17,18 @@ class FastPact {
         return new Failure(err)
     }
 
-    constructor() {
+    constructor(executor) {
         this.listeners = []
         this.delegate = null
+        if (executor != null) {
+            try {
+                executor(
+                    (result) => this.setPromise(to_promise(result)), 
+                    (err) => this.setPromise(new Failure(err)));
+            } catch(e) {
+                this.setPromise(new Failure(e));
+            }
+        }
     }
 
     setPromise(delegate) {
@@ -37,35 +46,38 @@ class FastPact {
         this.listeners = []
     }
 
-    setResolve(result) {
-        this.setPromise(to_promise(result))
-    }
-
-    setErr(err) {
-        this.setPromise(new Failure(err))
-    }
-
-
     then(onResolve, onReject) {
         if (this.delegate == null) {
             const returned = new FastPact()
             this.listeners.push([onResolve, onReject, returned])
             return returned
         } else {
-            return this.delegate.then(onResolve, onReject)
+            return this.deep().then(onResolve, onReject)
         }
     }
+    
     deep() {
         if (this.delegate != null) {
             if (this.delegate instanceof FastPact) {
-                return this.delegate.deep()
-            } else {
-                return this.delegate
+                this.delegate = this.delegate.deep()
             }
+            return this.delegate
         } else {
             return this
         }
     }
+}
+
+function next(action) {
+    return new FastPact((resolve, reject) => {
+        runImmediate(() => {
+            try {
+                resolve(action());
+            } catch(err) {
+                reject(err);
+            }
+        })
+    })
 }
 
 class Immediate {
@@ -76,17 +88,7 @@ class Immediate {
         if (!isFunc(onResolve)) {
             return this
         }
-        const returned = new FastPact()
-        runImmediate(() => {
-            try {
-                const next = onResolve(this.value)
-                const promise = to_promise(next)
-                returned.setPromise(promise)
-            } catch (e) {
-                returned.setPromise(new Failure(e))
-            }
-        })
-        return returned
+        return next(() => onResolve(this.value));
     }
 }
 
@@ -99,17 +101,7 @@ class Failure {
             return this
         }
 
-        const returned = new FastPact()
-        runImmediate(() => {
-            try {
-                const next = onReject(this.err)
-                const promise = to_promise(next)
-                returned.setPromise(promise)
-            } catch (e) {
-                returned.setPromise(new Failure(e))
-            }
-        })
-        return returned
+        return next(() => onReject(this.err));
     }
 }
 
@@ -143,75 +135,9 @@ function to_promise(arg) {
         return new Immediate(arg)
     }
 
-    const pact = new FastPact()
-
-    class FastFoward {
-        constructor() {
-            this.done = false
-        }
-        onResolve(result) {
-            if (this.done) {
-                return
-            }
-            this.done = true
-
-            if (result instanceof FastPact) {
-                return pact.setPromise(result.deep())
-            }
-        
-            if (result instanceof Immediate ||
-                result instanceof Failure) {
-                return pact.setPromise(result)
-            }
-                
-            const resultType = typeof result
-            if (resultType != 'function' && resultType != 'object') {
-                return pact.setPromise(new Immediate(result))
-            }
-
-            if (!result) {
-                return pact.setPromise(new Immediate(result))
-            }
-        
-            let resultThen
-            try {
-                resultThen = result.then
-            } catch(e) {
-                return pact.setPromise(new Failure(e))
-            }
-        
-            const resultThenType = typeof resultThen
-            if (resultThenType != 'function') {
-                return pact.setPromise(new Immediate(result))
-            }
-
-            fast_forward(result, resultThen)
-        }
-        onReject(err) {
-            if (this.done) {
-                return
-            }
-            this.done = true
-
-            pact.setErr(err)
-        }
-    }
-
-    function fast_forward(target, targetThen) {
-        const ff = new FastFoward()
-        const onResolve = (result) => ff.onResolve(result)
-        const onReject = (err) => ff.onReject(err)
-
-        try {
-            targetThen.call(target, onResolve, onReject)
-        } catch(e) {
-            ff.onReject(e)
-        }
-    }
-    
-    fast_forward(arg, argThen)
-
-    return pact
+    return new FastPact((onResolve, onReject) => {
+        argThen.call(arg, onResolve, onReject);
+    });
 }
 
 
