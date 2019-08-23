@@ -2,9 +2,9 @@
   "name": "fast-pact",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "fast-pact.js",
   "scripts": {
-    "test": "node tests.js"
+    "test": "node fast-pact-test.js"
   },
   "author": "",
   "license": "ISC",
