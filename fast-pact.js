@@ -1,6 +1,6 @@
-function isFunc(obj) {
-    return !!(obj && obj.constructor && obj.call && obj.apply);
-};
+function isFunc(fn) {
+    return typeof fn === 'function'
+}
 
 // TODO(anitvasu): This is non-standard :(
 function runImmediate(fn) {
@@ -81,7 +81,7 @@ class FastPact {
         }
     
         const argType = typeof arg
-        if (arg == null || (argType != 'function' && argType != 'object')) {
+        if (arg == null || (argType !== 'function' && argType !== 'object')) {
             return new Immediate(arg)
         }
     
