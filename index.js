@@ -2,11 +2,10 @@ function isFunc(fn) {
     return typeof fn === 'function'
 }
 
-// TODO(anitvasu): This is non-standard :(
 function runImmediate(fn) {
-    setImmediate(fn)
+    // TODO(anitvasu): Call appropriate method based on environment.
+    setImmediate(fn);
 }
-
 
 const PROMISE = 0;
 const THENABLE = 1;
@@ -125,14 +124,45 @@ class FastPact {
         this.listeners = []
         this.delegate = null
         if (executor != null) {
+            const rejectFn = (arg) => {
+                if (this.delegate != null) {
+                    return;
+                }
+                this.setPromise(new Failure(arg))
+            }
+
+            const resolveFn = (result) => {
+                if (this.delegate != null) {
+                    return;
+                }
+                if (result == this) {
+                    return rejectFn(new TypeError("Can't resolve to self"));
+                }
+                try {
+                    const category = classify(result);
+                    if (category == PLAIN) {
+                        this.setPromise(new Immediate(result));
+                    } else if (category == PROMISE) {
+                        result = result.deep();
+                        if (result == this) {
+                            rejectFn(new TypeError("Cycle Detected"));
+                        } else {
+                            this.setPromise(result);
+                        }
+                    } else {
+                        this.setPromise(new FastPact((nextResolveFn, nextRejectFn) => {
+                            category.call(result, nextResolveFn, nextRejectFn);
+                        }));
+                    }
+                } catch(e) {
+                    rejectFn(e);
+                }
+            }
+    
             try {
-                executor(
-                    (result) => this.setPromise(FastPact.resolve(result)), 
-                    (err) => this.setPromise(new Failure(err)),
-                    (simple) => this.setPromise(new Immediate(simple)),
-                    this);
+                executor(resolveFn, rejectFn, this);
             } catch(e) {
-                this.setPromise(new Failure(e));
+                rejectFn(e);
             }
         }
         if (this.delegate != null) {
@@ -143,9 +173,6 @@ class FastPact {
     setPromise(delegate) {
         if (this.delegate != null) {
             return
-        }
-        if (delegate == this) {
-            return this.setPromise(new Failure(new TypeError()))
         }
         this.delegate = delegate
         for (const action of this.listeners) {
@@ -162,9 +189,18 @@ class FastPact {
         }
     }
 
+    deep() {
+        if (this.delegate == null) {
+            return this;
+        } else {
+            this.delegate = this.delegate.deep();
+            return this.delegate;
+        }
+    }
+
     then(onResolve, onReject) {
         if (this.delegate == null) {
-            return new FastPact((resolveFn, rejectFn, simpleFn, samePromise) => {
+            return new FastPact((resolveFn, rejectFn) => {
 
                 const apply = (action, fallbackAction) => {
                     return arg => {
@@ -173,19 +209,7 @@ class FastPact {
                                 fallbackAction(arg)
                             } else {
                                 const val = action(arg);
-                                if (val == samePromise) {
-                                    rejectFn(new TypeError());
-                                }
-
-                                const category = classify(val);
-                                if (category == PLAIN) {
-                                    simpleFn(val);
-                                } else if (category == PROMISE) {
-                                    val.listen(simpleFn, rejectFn)
-                                } else {
-                                    // category == val.then
-                                    category.call(val, resolveFn, rejectFn);
-                                }
+                                resolveFn(val);
                             }
                         } catch(e) {
                             rejectFn(e);
@@ -202,22 +226,12 @@ class FastPact {
 }
 
 function next(action) {
-    return new FastPact((resolveFn, rejectFn, simpleFn, samePromise) => {
+    return new FastPact((resolveFn, rejectFn) => {
         runImmediate(() => {
             try {
+                // console.log("then()")
                 const val = action();
-                if (val == samePromise) {
-                    rejectFn(new TypeError());
-                }
-                const category = classify(val);
-                if (category == PLAIN) {
-                    simpleFn(val);
-                } else if (category == PROMISE) {
-                    val.listen(simpleFn, rejectFn)
-                } else {
-                    // category == val.then
-                    category.call(val, resolveFn, rejectFn);
-                }
+                resolveFn(val);
             } catch(err) {
                 rejectFn(err);
             }
@@ -238,6 +252,9 @@ class Immediate {
         }
         return next(() => onResolve(this.value));
     }
+    deep() {
+        return this;
+    }
 }
 
 class Failure {
@@ -252,6 +269,9 @@ class Failure {
             return this
         }
         return next(() => onReject(this.err));
+    }
+    deep() {
+        return this;
     }
 }
 
