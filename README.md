@@ -17,7 +17,7 @@ I hope it is at least one of the smallest Promises library that passes all tests
 NEW: FastPact is now Pact!
 
 Parallel benchmark: (Bluebird/bench parallel: Now beating native promises and native async await! )
-`
+```
 
 file                                      time(ms)  memory(MB)
 callbacks-baseline.js                          459       67.16
@@ -40,9 +40,10 @@ promises-obvious-kew.js                       3810      458.77
 streamline-generators.js                      8255      973.62
 streamline-callbacks.js                      14268     1175.07
 
-`
+```
 
-`
+Sequential
+```
 file                                       time(ms)  memory(MB)
 callbacks-baseline.js                           201       26.83
 promises-bluebird-generator.js                  256       37.20
@@ -68,6 +69,6 @@ observables-Reactive-Extensions-RxJS.js        1635      241.07
 observables-caolan-highland.js                 3829      457.68
 promises-kriskowal-q.js                        4379      252.69
 observables-baconjs-bacon.js.js                6367      690.79
-`
+```
 
 
