@@ -8,8 +8,7 @@ function runImmediate(fn) {
 }
 
 const PROMISE = 0;
-const THENABLE = 1;
-const PLAIN = 2;
+const PLAIN = 1;
 
 function classify(arg) {
     if (arg instanceof FastPact) {
@@ -33,6 +32,12 @@ function classify(arg) {
     return argThen;
 }
 
+class Listener {
+    constructor(onResolve, onReject) {
+        this.onResolve = onResolve;
+        this.onReject = onReject;
+    }
+}
 
 class FastPact {
 
@@ -121,7 +126,6 @@ class FastPact {
     }
 
     constructor(executor) {
-        this.listeners = []
         this.delegate = null
         if (executor != null) {
             const rejectFn = (arg) => {
@@ -167,6 +171,8 @@ class FastPact {
         }
         if (this.delegate != null) {
             return this.delegate;
+        } else {
+            this.listeners = []
         }
     }
 
@@ -175,17 +181,19 @@ class FastPact {
             return
         }
         this.delegate = delegate
-        for (const action of this.listeners) {
-            this.delegate.listen(action[0], action[1]);
+        if (this.listeners != null) {
+            for (const action of this.listeners) {
+                this.delegate.listen(action);
+            }
+            this.listeners = null;
         }
-        this.listeners = []
     }
 
-    listen(onResolve, onReject) {
+    listen(listener) {
         if (this.delegate == null) {
-            this.listeners.push([onResolve, onReject]);
+            this.listeners.push(listener);
         } else {
-            this.delegate.listen(onResolve, onReject);
+            this.delegate.listen(listener);
         }
     }
 
@@ -217,7 +225,8 @@ class FastPact {
                     }
                 }
 
-                this.listeners.push([apply(onResolve, resolveFn), apply(onReject, rejectFn)])
+                const listener = new Listener(apply(onResolve, resolveFn), apply(onReject, rejectFn));
+                this.listen(listener);
             })
         } else {
             return this.delegate.then(onResolve, onReject)
@@ -243,8 +252,8 @@ class Immediate {
     constructor(value) {
         this.value = value
     }
-    listen(onResolve, onReject) {
-        runImmediate(() => onResolve(this.value));
+    listen(listener) {
+        runImmediate(() => listener.onResolve(this.value));
     }
     then(onResolve, onReject) {
         if (!isFunc(onResolve)) {
@@ -261,8 +270,8 @@ class Failure {
     constructor(err) {
         this.err = err
     }
-    listen(onResolve, onReject) {
-        runImmediate(() => onReject(this.err));
+    listen(listener) {
+        runImmediate(() => listener.onReject(this.err));
     }
     then(onResolve, onReject) {
         if (!isFunc(onReject)) {
